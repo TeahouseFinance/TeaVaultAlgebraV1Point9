@@ -354,9 +354,9 @@ describe("TeaVaultAlgebraV1Point9", function () {
             .to.be.revertedWithCustomError(vault, "InvalidPriceSlippage");
         });
     });
-/*
+
     describe("Manager functions", function() {
-        it("Should be able to do in-pool swap", async function() {
+        it("Should be able to swap using 3rd party pool", async function() {
             const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
 
             // deposit
@@ -367,37 +367,29 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await token0.connect(user).approve(vault, token0Amount);
             await vault.connect(user).deposit(shares, token0Amount, 0n);
 
-            // manager swap, using Ambient
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const amounts = await vault.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
-            expect(amounts[0]).to.lte(swapAmount);
-            const outAmount = amounts[1];
-            await vault.connect(manager).ambientSwap(true, swapAmount, 0n);
+            const swapRelayer = await vault.swapRelayer();
+            const swapParams = [
+                token0.target,
+                token1.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            await token0.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await vault.connect(manager).executeSwap(true, swapAmount, outAmount, v3Router.target, uniswapV3SwapData);
 
             const amount0AfterSwap = await token0.balanceOf(vault);
             const amount1AfterSwap = await token1.balanceOf(vault);
             expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
             expect(amount1AfterSwap).to.gte(outAmount); // should receive outAmount or more
-        });
-
-        it("Should not be able to do in-pool swap with wrong slippage", async function() {
-            const { user, manager, vault, token0 } = await helpers.loadFixture(deployTeaVaultFixture);
-
-            // deposit
-            const token0Decimals = await token0.decimals();
-            const vaultDecimals = await vault.decimals();
-            const shares = ethers.parseUnits("1", vaultDecimals);
-            const token0Amount = ethers.parseUnits("1", token0Decimals);
-            await token0.connect(user).approve(vault, token0Amount);
-            await vault.connect(user).deposit(shares, token0Amount, 0n);
-
-            // manager swap, using Ambient
-            const swapAmount = token0Amount / 2n;
-            const amounts = await vault.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
-            expect(amounts[0]).to.lte(swapAmount);
-            const outAmount = amounts[1];
-            await expect(vault.connect(manager).ambientSwap(true, swapAmount, outAmount + 1n))
-            .to.be.reverted; // likely to be reverted in Ambient
         });
 
         it("Should not be able to swap using 3rd party pool with wrong slippage", async function() {
@@ -413,11 +405,10 @@ describe("TeaVaultAlgebraV1Point9", function () {
 
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
-            const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
             const swapRelayer = await vault.swapRelayer();
             const swapParams = [
-                weth9,
+                token0.target,
                 token1.target,
                 500,
                 swapRelayer,
@@ -426,14 +417,15 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 0n,
                 0n
             ];
-            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            await token0.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
             await expect(vault.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
             .to.be.reverted; // could be reverted in pool or in vault
         });
 
-        it("Should not be able to do in-pool swap from non-manager", async function() {
-            const { user, vault, token0 } = await helpers.loadFixture(deployTeaVaultFixture);
+        it("Should not be able to swap using 3rd party pool from non-manager", async function() {
+            const { user, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
 
             // deposit
             const token0Decimals = await token0.decimals();
@@ -443,30 +435,12 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await token0.connect(user).approve(vault, token0Amount);
             await vault.connect(user).deposit(shares, token0Amount, 0n);
 
-            // manager swap, using Ambient
-            const swapAmount = token0Amount / 2n;
-            await expect(vault.connect(user).ambientSwap(true, swapAmount, 0n))
-            .to.be.revertedWithCustomError(vault, "CallerIsNotManager");
-        });
-
-        it("Should not be able to swap using 3rd party pool from non-manager", async function() {
-            const { user, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
-
-            // deposit
-            const token0Decimals = NATIVE_DECIMALS;
-            const vaultDecimals = await vault.decimals();
-            const shares = ethers.parseUnits("1", vaultDecimals);
-            const token0Amount = ethers.parseUnits("1", token0Decimals);
-            await token0.connect(user).approve(vault, token0Amount);
-            await vault.connect(user).deposit(shares, token0Amount, 0n);
-
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
-            const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
             const swapRelayer = await vault.swapRelayer();
             const swapParams = [
-                weth9,
+                token0.target,
                 token1.target,
                 500,
                 swapRelayer,
@@ -475,7 +449,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 0n,
                 0n
             ];
-            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            await token0.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
             await expect(vault.connect(user).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
             .to.be.revertedWithCustomError(vault, "CallerIsNotManager");
@@ -534,8 +509,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
 
             // add liquidity
             const poolInfo = await vault.getPoolInfo();
-            const currentTick = poolInfo[7];
-            const tickSpacing = poolInfo[5];
+            const currentTick = poolInfo[8];
+            const tickSpacing = poolInfo[6];
 
             // add positions
             const tick0 = ((currentTick - tickSpacing * 30n) / tickSpacing) * tickSpacing;
@@ -553,8 +528,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
             
             // add "lower" position
-            const amount0 = await token0.balanceOf(vault);
-            let liquidity0 = await vault.getLiquidityForAmounts(tick0, tick1, amount0, 0);
+            const amount1 = await token1.balanceOf(vault);
+            let liquidity0 = await vault.getLiquidityForAmounts(tick0, tick1, 0, amount1);
             await vault.connect(manager).addLiquidity(tick0, tick1, liquidity0, 0, 0, UINT64_MAX);
 
             positionInfo = await vault.positionInfo(1);
@@ -563,8 +538,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
 
             // add "upper" position
-            const amount1 = await token1.balanceOf(vault);
-            let liquidity2 = await vault.getLiquidityForAmounts(tick2, tick3, 0, amount1 - 10n); // slightly lower amount1 to avoid precision problem
+            const amount0 = await token1.balanceOf(vault);
+            let liquidity2 = await vault.getLiquidityForAmounts(tick2, tick3, amount0, 0); // slightly lower amount1 to avoid precision problem
             await vault.connect(manager).addLiquidity(tick2, tick3, liquidity2, 0, 0, UINT64_MAX);
 
             positionInfo = await vault.positionInfo(2);
@@ -594,8 +569,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await vault.connect(user).deposit(shares2 * 99n/ 100n, token0Amount2, token1Amount2);
 
             // reduce some position
-            await helpers.time.increase(1000);   // advance some time to get over the "JIT" limit
-            const position = await vault.positions(2);
+            await helpers.time.increase(1000);   // advance some time
+            const position = await vault.positions(1);
             await vault.connect(manager).removeLiquidity(position.tickLower, position.tickUpper, position.liquidity, 0, 0, UINT64_MAX);
 
             // check assets and token values
@@ -608,9 +583,9 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(await vault.estimatedValueInToken0()).to.be.closeTo(newAmount0 * 2n, newAmount0 * 2n / 100n);
             expect(await vault.estimatedValueInToken1()).to.be.closeTo(newAmount1 * 2n, newAmount1 * 2n / 100n);
 
-            // manager swap back, using CrocSwapDex
-            const swapAmount2 = await token1.balanceOf(vault);
-            await vault.connect(manager).ambientSwap(false, swapAmount2, 0);
+            // manager swap back, using UniswapV3
+            const swapAmount2 = await token1.balanceOf(vault);     
+            await vault.connect(manager).inPoolSwap(false, swapAmount2, 0);
 
             // withdraw
             const amount0Before = await token0.balanceOf(user);
@@ -624,12 +599,12 @@ describe("TeaVaultAlgebraV1Point9", function () {
             // estimate value of received tokens
             const amount0Diff = amount0After - amount0Before;
             const amount1Diff = amount1After - amount1Before;
-            const sqrtPriceQ64 = poolInfo[6];
-            const price = sqrtPriceQ64 * sqrtPriceQ64;
-            const totalIn0 = amount1Diff * price / (1n << 128n) + amount0Diff;
+            const sqrtPriceX96 = poolInfo[7];
+            const price = sqrtPriceX96 * sqrtPriceX96;
+            const totalIn0 = (amount1Diff << 192n) / price + amount0Diff;
 
             // expect withdrawn tokens to be > 95% of invested token0
-            const investedToken0 = token0AmountWithFee + token0Amount2 + token1Amount2 * price / (1n << 128n);
+            const investedToken0 = token0AmountWithFee + token0Amount2 + (token1Amount2 << 192n) / price;
             expect(totalIn0).to.be.closeTo(investedToken0, investedToken0 / 50n);
 
             // remove the remaining share
@@ -641,5 +616,4 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(await vault.getAllPositions()).to.eql([]);
         });
     });
-    */
 });

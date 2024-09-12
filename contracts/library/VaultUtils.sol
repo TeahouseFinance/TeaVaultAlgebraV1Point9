@@ -62,7 +62,14 @@ library VaultUtils {
         uint256 fee0,
         uint256 fee1
     ) {
-        bytes32 positionKey = keccak256(abi.encodePacked(_vault, uint256(0), _position.tickLower, _position.tickUpper));
+        // position key calculation for AlgebraV1.9
+        bytes32 positionKey;
+        int24 bottomTick = _position.tickLower;
+        int24 topTick = _position.tickUpper;
+        assembly {
+            positionKey := or(shl(24, or(shl(24, _vault), and(bottomTick, 0xFFFFFF))), and(topTick, 0xFFFFFF))
+        }
+
         (uint160 sqrtPriceX96, int24 tick, , , , , , ) = _pool.globalState();
         uint256 feeGrowthGlobal0X128 = _pool.totalFeeGrowth0Token();
         uint256 feeGrowthGlobal1X128 = _pool.totalFeeGrowth1Token();

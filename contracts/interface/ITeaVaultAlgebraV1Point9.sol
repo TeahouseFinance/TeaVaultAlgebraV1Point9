@@ -108,15 +108,15 @@ interface ITeaVaultAlgebraV1Point9 {
     /// @return sqrtPriceX96 Current pool square root price in Q64.96
     /// @return tick Current pool price in tick
     function getPoolInfo() external view returns (
-        ERC20Upgradeable,
-        ERC20Upgradeable,
-        uint8,
-        uint8,
-        uint16,
-        uint16,
-        int24,
-        uint160,
-        int24
+        ERC20Upgradeable token0,
+        ERC20Upgradeable token1,
+        uint8 decimals0,
+        uint8 decimals1,
+        uint16 feeZto,
+        uint16 feeOtz,
+        int24 tickSpacing,
+        uint160 sqrtPriceX96,
+        int24 tick
     );
 
     /// @notice Mint shares and deposit token0 and token1
@@ -217,6 +217,21 @@ interface ITeaVaultAlgebraV1Point9 {
     /// @notice Only fund manager can do this
     /// @return collectedShares Share amount collected by minting
     function collectManagementFee() external returns (uint256 collectedShares);
+
+    /// @notice Swap using the pool of the vault
+    /// @param zeroForOne Swap direction
+    /// @param maxPaidAmount Maximum paid amount
+    /// @param minReceivedAmount Minimum received amount
+    /// @return paidAmount Paid amount
+    /// @return receivedAmount Received amount
+    function inPoolSwap(
+        bool zeroForOne,
+        uint256 maxPaidAmount,
+        uint256 minReceivedAmount
+    ) external returns (
+        uint256 paidAmount,
+        uint256 receivedAmount
+    );
 
     /// @notice Execute swap from any router via swap relayer
     /// @param zeroForOne Swap direction

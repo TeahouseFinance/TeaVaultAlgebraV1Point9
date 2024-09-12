@@ -20,7 +20,7 @@ import {ITeaVaultAlgebraV1Point9} from "./interface/ITeaVaultAlgebraV1Point9.sol
 import {ISwapRelayer} from "./interface/ISwapRelayer.sol";
 import {VaultUtils} from "./library/VaultUtils.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 contract TeaVaultAlgebraV1Point9 is
     ITeaVaultAlgebraV1Point9,
@@ -430,7 +430,7 @@ contract TeaVaultAlgebraV1Point9 is
         uint256 amount0,
         uint256 amount1
     ) {
-        (amount0, amount1) = _addLiquidity(msg.sender, _tickLower, _tickUpper, _liquidity, abi.encode(msg.sender));
+        (amount0, amount1) = _addLiquidity(msg.sender, _tickLower, _tickUpper, _liquidity, abi.encode(address(0)));
         if (amount0 < _amount0Min || amount1 < _amount1Min) revert InvalidPriceSlippage(amount0, amount1);
     }
 
@@ -659,6 +659,33 @@ contract TeaVaultAlgebraV1Point9 is
         else {
             revert();
         }
+    }
+
+    /// @inheritdoc ITeaVaultAlgebraV1Point9
+    function inPoolSwap(
+        bool _zeroForOne,
+        uint256 _maxPaidAmount,
+        uint256 _minReceivedAmount
+    ) external override nonReentrant onlyManager returns (
+        uint256 paidAmount,
+        uint256 receivedAmount
+    ) {
+        callbackStatus = 2;
+        (int256 amount0, int256 amount1) = pool.swap(
+            address(this),
+            _zeroForOne,
+            _maxPaidAmount.toInt256(),
+            _zeroForOne ? TickMath.MIN_SQRT_RATIO + 1 : TickMath.MAX_SQRT_RATIO - 1,
+            abi.encode(_zeroForOne)
+        );
+        callbackStatus = 1;
+
+        paidAmount = uint256(_zeroForOne ? amount0 : amount1);
+        receivedAmount = uint256(-(_zeroForOne ? amount1 : amount0));
+        if (receivedAmount < _minReceivedAmount) revert InsufficientSwapResult(_minReceivedAmount, receivedAmount);
+
+        (ERC20Upgradeable src, ERC20Upgradeable dst) = _zeroForOne ? (token0, token1) : (token1, token0);
+        emit Swap(msg.sender, src, dst, block.timestamp, address(pool), paidAmount, receivedAmount);
     }
 
     /// @inheritdoc ITeaVaultAlgebraV1Point9
