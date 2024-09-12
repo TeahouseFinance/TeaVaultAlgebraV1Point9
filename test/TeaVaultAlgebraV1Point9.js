@@ -144,10 +144,10 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(await vault.decimals()).to.equal(18);
         });
     });
-/*
+
     describe("Owner functions", function() {
         it("Should be able to set fees from owner", async function() {
-            const { owner, vaultNative } = await helpers.loadFixture(deployTeaVaultFixture);
+            const { owner, vault } = await helpers.loadFixture(deployTeaVaultFixture);
 
             const feeConfig = {
                 treasury: owner.address,
@@ -157,8 +157,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 managementFee: 10000,
             };
 
-            await vaultNative.setFeeConfig(feeConfig);
-            const fees = await vaultNative.feeConfig();
+            await vault.setFeeConfig(feeConfig);
+            const fees = await vault.feeConfig();
 
             expect(feeConfig.treasury).to.equal(fees.treasury);
             expect(feeConfig.entryFee).to.equal(fees.entryFee);
@@ -168,7 +168,7 @@ describe("TeaVaultAlgebraV1Point9", function () {
         });
 
         it("Should not be able to set incorrect fees", async function() {
-            const { owner, vaultNative } = await helpers.loadFixture(deployTeaVaultFixture);
+            const { owner, vault } = await helpers.loadFixture(deployTeaVaultFixture);
 
             const feeConfig1 = {
                 treasury: owner.address,
@@ -178,8 +178,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 managementFee: 10000,
             };
 
-            await expect(vaultNative.setFeeConfig(feeConfig1))
-            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
+            await expect(vault.setFeeConfig(feeConfig1))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
 
             const feeConfig2 = {
                 treasury: owner.address,
@@ -189,8 +189,8 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 managementFee: 10000,
             };
 
-            await expect(vaultNative.setFeeConfig(feeConfig2))
-            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
+            await expect(vault.setFeeConfig(feeConfig2))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
 
             const feeConfig3 = {
                 treasury: owner.address,
@@ -200,12 +200,12 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 managementFee: 1000001,
             };
 
-            await expect(vaultNative.setFeeConfig(feeConfig3))
-            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
+            await expect(vault.setFeeConfig(feeConfig3))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
         });
 
         it("Should not be able to set fees from non-owner", async function() {
-            const { manager, vaultNative } = await helpers.loadFixture(deployTeaVaultFixture);
+            const { manager, vault } = await helpers.loadFixture(deployTeaVaultFixture);
 
             const feeConfig = {
                 treasury: manager.address,
@@ -215,23 +215,23 @@ describe("TeaVaultAlgebraV1Point9", function () {
                 managementFee: 10000,
             }
 
-            await expect(vaultNative.connect(manager).setFeeConfig(feeConfig))
-            .to.be.revertedWithCustomError(vaultNative, "OwnableUnauthorizedAccount");
+            await expect(vault.connect(manager).setFeeConfig(feeConfig))
+            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
         });
 
         it("Should be able to assign manager from owner", async function() {
-            const { manager, vaultNative } = await helpers.loadFixture(deployTeaVaultFixture);
+            const { manager, vault } = await helpers.loadFixture(deployTeaVaultFixture);
 
-            await vaultNative.assignManager(manager.address);
-            expect(await vaultNative.manager()).to.equal(manager.address);
+            await vault.assignManager(manager.address);
+            expect(await vault.manager()).to.equal(manager.address);
         });
 
         it("Should not be able to assign manager from non-owner", async function() {
-            const { manager, user, vaultNative } = await helpers.loadFixture(deployTeaVaultFixture);
+            const { manager, user, vault } = await helpers.loadFixture(deployTeaVaultFixture);
 
-            await expect(vaultNative.connect(manager).assignManager(user.address))
-            .to.be.revertedWithCustomError(vaultNative, "OwnableUnauthorizedAccount");
-            expect(await vaultNative.manager()).to.equal(manager.address);
+            await expect(vault.connect(manager).assignManager(user.address))
+            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+            expect(await vault.manager()).to.equal(manager.address);
         });
     });
 
@@ -354,7 +354,7 @@ describe("TeaVaultAlgebraV1Point9", function () {
             .to.be.revertedWithCustomError(vaultERC20, "InvalidPriceSlippage");
         });
     });
-
+/*
     describe("Manager functions", function() {
         it("Should be able to do in-pool swap", async function() {
             const { user, manager, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultFixture);
