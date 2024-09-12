@@ -356,6 +356,60 @@ describe("TeaVaultAlgebraV1Point9", function () {
     });
 
     describe("Manager functions", function() {
+        it("Should be able to swap in pool", async function() {
+            const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const swapAmount = token0Amount / 2n;
+            await vault.connect(manager).inPoolSwap(true, swapAmount, 0);
+
+            const amount0AfterSwap = await token0.balanceOf(vault);
+            expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
+        });
+
+        it("Should not be able to swap in pool with wrong slippage", async function() {
+            const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const swapAmount = token0Amount / 2n;
+            const outAmounts = await vault.connect(manager).inPoolSwap.staticCall(true, swapAmount, 0);
+            await expect(vault.connect(manager).inPoolSwap(true, swapAmount, outAmounts[1] + 1n))
+            .to.be.reverted; // could be reverted in pool or in vault
+        });
+
+        it("Should not be able to swap in pool from non-manager", async function() {
+            const { user, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const swapAmount = token0Amount / 2n;
+            await expect(vault.connect(user).inPoolSwap(true, swapAmount, 0))
+            .to.be.revertedWithCustomError(vault, "CallerIsNotManager");
+        });
+
         it("Should be able to swap using 3rd party pool", async function() {
             const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
 
