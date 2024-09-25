@@ -90,7 +90,7 @@ contract TeaVaultAlgebraV1Point9 is
         SECONDS_IN_A_YEAR = 365 * 24 * 60 * 60;
         DECIMALS_MULTIPLIER = 10 ** _decimalOffset;
         FEE_MULTIPLIER = 1000000;
-        if (_feeCap >= FEE_MULTIPLIER * 30 / 100) revert InvalidFeeCap();
+        if (_feeCap > FEE_MULTIPLIER * 30 / 100) revert InvalidFeeCap();
         FEE_CAP = _feeCap; 
 
         _assignManager(_manager);

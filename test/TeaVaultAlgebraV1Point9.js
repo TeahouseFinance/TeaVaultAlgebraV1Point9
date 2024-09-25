@@ -30,6 +30,11 @@ function loadEnvVarInt(env, errorMsg) {
     return parseInt(env);
 }
 
+async function getCurrentTime() {
+    const block = await ethers.provider.getBlock();
+    return block.timestamp;
+}
+
 
 // setup ambient parameters
 const testRpc = loadEnvVar(process.env.TEST_RPC, "No TEST_RPC");
@@ -110,7 +115,7 @@ describe("TeaVaultAlgebraV1Point9", function () {
             testToken0,
             testToken1,
             manager.address,
-            999999,
+            300000,
             {
                 treasury: treasury.address,
                 entryFee: 0,
@@ -368,8 +373,9 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await vault.connect(user).deposit(shares, token0Amount, 0n);
 
             // manager swap, using UniswapV3
+            const deadline = (await getCurrentTime()) + 1000;
             const swapAmount = token0Amount / 2n;
-            await vault.connect(manager).inPoolSwap(true, swapAmount, 0);
+            await vault.connect(manager).inPoolSwap(true, swapAmount, 0, deadline);
 
             const amount0AfterSwap = await token0.balanceOf(vault);
             expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
@@ -387,10 +393,29 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await vault.connect(user).deposit(shares, token0Amount, 0n);
 
             // manager swap, using UniswapV3
+            const deadline = (await getCurrentTime()) + 1000;
             const swapAmount = token0Amount / 2n;
-            const outAmounts = await vault.connect(manager).inPoolSwap.staticCall(true, swapAmount, 0);
-            await expect(vault.connect(manager).inPoolSwap(true, swapAmount, outAmounts[1] + 1n))
+            const outAmounts = await vault.connect(manager).inPoolSwap.staticCall(true, swapAmount, 0, deadline);
+            await expect(vault.connect(manager).inPoolSwap(true, swapAmount, outAmounts[1] + 1n, deadline))
             .to.be.reverted; // could be reverted in pool or in vault
+        });
+
+        it("Should not be able to swap in pool with expired deadline", async function() {
+            const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const deadline = (await getCurrentTime()) - 1000;
+            const swapAmount = token0Amount / 2n;
+            await expect(vault.connect(manager).inPoolSwap(true, swapAmount, 0, deadline))
+            .to.be.revertedWithCustomError(vault, "TransactionExpired");
         });
 
         it("Should not be able to swap in pool from non-manager", async function() {
@@ -405,8 +430,9 @@ describe("TeaVaultAlgebraV1Point9", function () {
             await vault.connect(user).deposit(shares, token0Amount, 0n);
 
             // manager swap, using UniswapV3
+            const deadline = (await getCurrentTime()) + 1000;
             const swapAmount = token0Amount / 2n;
-            await expect(vault.connect(user).inPoolSwap(true, swapAmount, 0))
+            await expect(vault.connect(user).inPoolSwap(true, swapAmount, 0, deadline))
             .to.be.revertedWithCustomError(vault, "CallerIsNotManager");
         });
 
@@ -424,21 +450,23 @@ describe("TeaVaultAlgebraV1Point9", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vault.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0.target,
                 token1.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
                 0n
             ];
+            const deadline = (await getCurrentTime()) + 1000;
             await token0.connect(user).approve(v3Router, swapAmount);
             const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
-            await vault.connect(manager).executeSwap(true, swapAmount, outAmount, v3Router.target, uniswapV3SwapData);
+            await vault.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData);
 
             const amount0AfterSwap = await token0.balanceOf(vault);
             const amount1AfterSwap = await token1.balanceOf(vault);
@@ -460,22 +488,91 @@ describe("TeaVaultAlgebraV1Point9", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vault.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0.target,
                 token1.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
                 0n
             ];
+            const deadline = (await getCurrentTime()) + 1000;
             await token0.connect(user).approve(v3Router, swapAmount);
             const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
-            await expect(vault.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            await expect(vault.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, deadline, v3Router.target, uniswapV3SwapData))
             .to.be.reverted; // could be reverted in pool or in vault
+        });
+
+        it("Should not be able to swap using 3rd party pool With expired deadline", async function() {
+            const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
+            const swapParams = [
+                token0.target,
+                token1.target,
+                500,
+                swapRelayer.target,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const deadline = (await getCurrentTime()) - 1000;
+            await token0.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vault.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(vault, "TransactionExpired");
+        });
+
+        it("Should not be able to swap using 3rd party pool Without whitelist", async function() {
+            const { user, manager, vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultFixture);
+
+            // deposit
+            const token0Decimals = await token0.decimals();
+            const vaultDecimals = await vault.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0.connect(user).approve(vault, token0Amount);
+            await vault.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            const swapParams = [
+                token0.target,
+                token1.target,
+                500,
+                swapRelayer.target,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const deadline = (await getCurrentTime()) + 1000;
+            await token0.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vault.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(swapRelayer, "NotWhitelisted");
         });
 
         it("Should not be able to swap using 3rd party pool from non-manager", async function() {
@@ -492,21 +589,23 @@ describe("TeaVaultAlgebraV1Point9", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vault.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0.target,
                 token1.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
                 0n
             ];
+            const deadline = (await getCurrentTime()) + 1000;
             await token0.connect(user).approve(v3Router, swapAmount);
             const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
-            await expect(vault.connect(user).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            await expect(vault.connect(user).executeSwap(true, swapAmount, outAmount + 1n, deadline, v3Router.target, uniswapV3SwapData))
             .to.be.revertedWithCustomError(vault, "CallerIsNotManager");
         });
 
@@ -540,21 +639,23 @@ describe("TeaVaultAlgebraV1Point9", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vault.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vault.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0.target,
                 token1.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
                 0n
             ];
+            const deadline = (await getCurrentTime()) + 1000;
             await token0.connect(user).approve(v3Router, swapAmount);
             const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
-            await vault.connect(manager).executeSwap(true, swapAmount, outAmount, v3Router.target, uniswapV3SwapData);
+            await vault.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData);
 
             const amount0AfterSwap = await token0.balanceOf(vault);
             const amount1AfterSwap = await token1.balanceOf(vault);
@@ -638,8 +739,9 @@ describe("TeaVaultAlgebraV1Point9", function () {
             expect(await vault.estimatedValueInToken1()).to.be.closeTo(newAmount1 * 2n, newAmount1 * 2n / 100n);
 
             // manager swap back, using UniswapV3
+            const deadline2 = (await getCurrentTime()) + 1000;
             const swapAmount2 = await token1.balanceOf(vault);     
-            await vault.connect(manager).inPoolSwap(false, swapAmount2, 0);
+            await vault.connect(manager).inPoolSwap(false, swapAmount2, 0, deadline2);
 
             // withdraw
             const amount0Before = await token0.balanceOf(user);
