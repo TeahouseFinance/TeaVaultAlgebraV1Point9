@@ -20,6 +20,8 @@ contract TeaVaultAlgebraV1Point9Factory is ITeaVaultAlgebraV1Point9Factory, Init
     SwapRelayer public swapRelayer;
     address public poolFactory;
 
+    uint256[47] private __gap;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -34,9 +36,10 @@ contract TeaVaultAlgebraV1Point9Factory is ITeaVaultAlgebraV1Point9Factory, Init
     ) public initializer {
         __UUPSUpgradeable_init();
         __Ownable_init(_owner);
+        __Pausable_init();
 
         vaultBeacon = _beacon;
-        swapRelayer = new SwapRelayer();
+        swapRelayer = new SwapRelayer(_owner);
         poolFactory = _poolFactory;
     }
 
@@ -50,7 +53,7 @@ contract TeaVaultAlgebraV1Point9Factory is ITeaVaultAlgebraV1Point9Factory, Init
         address _manager,
         uint24 _feeCap,
         TeaVaultAlgebraV1Point9.FeeConfig calldata _feeConfig
-    ) external returns (
+    ) external onlyOwner returns (
         address deployedAddress
     ) {
         deployedAddress = address(new BeaconProxy(

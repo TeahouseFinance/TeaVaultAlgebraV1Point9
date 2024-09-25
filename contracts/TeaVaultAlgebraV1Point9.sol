@@ -52,6 +52,8 @@ contract TeaVaultAlgebraV1Point9 is
     uint256 public lastCollectManagementFee;
     uint256 private callbackStatus;
 
+    uint256[34] private __gap;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers(); // prevent attackers from using implementation contracts
@@ -88,7 +90,7 @@ contract TeaVaultAlgebraV1Point9 is
         SECONDS_IN_A_YEAR = 365 * 24 * 60 * 60;
         DECIMALS_MULTIPLIER = 10 ** _decimalOffset;
         FEE_MULTIPLIER = 1000000;
-        if (_feeCap >= FEE_MULTIPLIER) revert InvalidFeeCap();
+        if (_feeCap >= FEE_MULTIPLIER * 30 / 100) revert InvalidFeeCap();
         FEE_CAP = _feeCap; 
 
         _assignManager(_manager);
@@ -587,6 +589,7 @@ contract TeaVaultAlgebraV1Point9 is
                 emit ManagementFeeCollected(collectedShares);
             }
 
+            // Charge 0 management fee and initialize lastCollectManagementFee in the first deposit
             lastCollectManagementFee = block.timestamp;
         }
     }
@@ -665,8 +668,9 @@ contract TeaVaultAlgebraV1Point9 is
     function inPoolSwap(
         bool _zeroForOne,
         uint256 _maxPaidAmount,
-        uint256 _minReceivedAmount
-    ) external override nonReentrant onlyManager returns (
+        uint256 _minReceivedAmount,
+        uint64 _deadline
+    ) external override nonReentrant onlyManager checkDeadline(_deadline) returns (
         uint256 paidAmount,
         uint256 receivedAmount
     ) {
@@ -693,9 +697,10 @@ contract TeaVaultAlgebraV1Point9 is
         bool _zeroForOne,
         uint256 _maxPaidAmount,
         uint256 _minReceivedAmount,
+        uint64 _deadline,
         address _swapRouter,
         bytes calldata _data
-    ) external override nonReentrant onlyManager returns (
+    ) external override nonReentrant onlyManager checkDeadline(_deadline) returns (
         uint256 paidAmount,
         uint256 receivedAmount
     ) {
@@ -834,8 +839,8 @@ contract TeaVaultAlgebraV1Point9 is
         uint256 amount
     ) {
         amount = _isRoundingUp ? 
-            _assetAmount.mulDiv(_shares, _totalShares) :
-            _assetAmount.mulDivRoundingUp(_shares, _totalShares);
+            _assetAmount.mulDivRoundingUp(_shares, _totalShares):
+            _assetAmount.mulDiv(_shares, _totalShares);
     }
 
     function _fractionOfFees(uint256 _baseAmount, uint32 _feeRate) internal view returns (uint256 fee) {

@@ -7,7 +7,14 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 
 interface ISwapRelayer {
 
+    error LengthMismatch();
+    error NotWhitelisted();
+
+    event SetWhitelist(address sender, address[] router, bool[] isWhitelisted);
+
     receive() external payable;
+
+    function setWhitelist(address[] calldata _router, bool[] calldata _isWhitelisted) external;
 
     function swap(
         ERC20Upgradeable _srcToken,

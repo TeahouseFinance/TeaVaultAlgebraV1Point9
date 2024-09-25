@@ -2,6 +2,7 @@
 // Teahouse Finance
 pragma solidity =0.8.26;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -10,10 +11,24 @@ import {ISwapRelayer} from "./interface/ISwapRelayer.sol";
 /// @notice SwapRelayer is a helper contract for sending calls to arbitray swap router
 /// @notice Since there's no need to approve tokens to SwapRelayer, it's safe for Swapper
 /// @notice to call arbitrary contracts.
-contract SwapRelayer is ISwapRelayer {
+contract SwapRelayer is ISwapRelayer, Ownable {
     using SafeERC20 for ERC20Upgradeable;
 
+    mapping(address => bool) public routerWhitelist;
+
     receive() external payable {}
+
+    constructor(address initialOwner) Ownable(initialOwner) {}
+
+    function setWhitelist(address[] calldata _router, bool[] calldata _isWhitelisted) external override onlyOwner {
+        if (_router.length != _isWhitelisted.length) revert LengthMismatch();
+
+        for (uint256 i; i < _router.length; i = i + 1) {
+            routerWhitelist[_router[i]] = _isWhitelisted[i];
+        }
+
+        emit SetWhitelist(msg.sender, _router, _isWhitelisted);
+    }
 
     function swap(
         ERC20Upgradeable _src,
@@ -22,6 +37,8 @@ contract SwapRelayer is ISwapRelayer {
         address _swapRouter,
         bytes calldata _data
     ) external override {
+        if (!routerWhitelist[_swapRouter]) revert NotWhitelisted();
+
         _src.approve(_swapRouter, _amountIn);
         (bool success, bytes memory returndata) = _swapRouter.call(_data);
         uint256 length = returndata.length;

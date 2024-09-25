@@ -222,12 +222,14 @@ interface ITeaVaultAlgebraV1Point9 {
     /// @param zeroForOne Swap direction
     /// @param maxPaidAmount Maximum paid amount
     /// @param minReceivedAmount Minimum received amount
+    /// @param deadline Deadline of the transaction (transaction will revert if after this timestamp)
     /// @return paidAmount Paid amount
     /// @return receivedAmount Received amount
     function inPoolSwap(
         bool zeroForOne,
         uint256 maxPaidAmount,
-        uint256 minReceivedAmount
+        uint256 minReceivedAmount,
+        uint64 deadline
     ) external returns (
         uint256 paidAmount,
         uint256 receivedAmount
@@ -237,6 +239,7 @@ interface ITeaVaultAlgebraV1Point9 {
     /// @param zeroForOne Swap direction
     /// @param maxPaidAmount Maximum paid amount
     /// @param minReceivedAmount Minimum received amount
+    /// @param deadline Deadline of the transaction (transaction will revert if after this timestamp)
     /// @param swapRouter Swap router
     /// @param data Calldata for swap router
     /// @return paidAmount Paid amount
@@ -245,6 +248,7 @@ interface ITeaVaultAlgebraV1Point9 {
         bool zeroForOne,
         uint256 maxPaidAmount,
         uint256 minReceivedAmount,
+        uint64 deadline,
         address swapRouter,
         bytes calldata data
     ) external returns (
