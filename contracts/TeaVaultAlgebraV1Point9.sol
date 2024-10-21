@@ -506,7 +506,7 @@ contract TeaVaultAlgebraV1Point9 is
     function collectPositionSwapFee(
         int24 _tickLower,
         int24 _tickUpper
-    ) external override nonReentrant returns (
+    ) external override nonReentrant onlyManager returns (
         uint128 amount0,
         uint128 amount1
     ) {
@@ -847,10 +847,6 @@ contract TeaVaultAlgebraV1Point9 is
         fee = _baseAmount.mulDivRoundingUp(_feeRate, FEE_MULTIPLIER);
     }
 
-    function _abs(int128 input) internal pure returns (uint256 output) {
-        output = uint256(int256(input < 0 ? -input : input));
-    }
-
     // sanity check functions & modifiers
 
     function _zeroAddressNotAllowed(address _address) internal pure {
@@ -898,7 +894,7 @@ contract TeaVaultAlgebraV1Point9 is
     }
 
     modifier checkDeadline(uint256 _deadline) {
-        _checkDeadline(_deadline);
         _;
+        _checkDeadline(_deadline);
     }
 }
