@@ -523,7 +523,7 @@ contract TeaVaultAlgebraV1Point9 is
     }
 
     /// @inheritdoc ITeaVaultAlgebraV1Point9
-    function collectAllSwapFee() external override nonReentrant returns (uint128 amount0, uint128 amount1) {
+    function collectAllSwapFee() external override nonReentrant onlyManager returns (uint128 amount0, uint128 amount1) {
         return _collectAllSwapFee();
     }
 
